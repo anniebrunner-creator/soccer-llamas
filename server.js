@@ -240,5 +240,5 @@ app.get('/healthz', (req, res) => res.json({ ok: true }));
 
 app.use((err, req, res, next) => { console.error(err); res.status(500).send(layout({ title: 'Oops', body: `<div class="card"><h2>🦙 Oops, something broke</h2><p>${esc(err.message)}</p></div>` })); });
 
-if (require.main === module) app.listen(cfg.port, '127.0.0.1', () => { console.log(`Soccer Llamas running at http://localhost:${cfg.port}${cfg.demo ? ' (DEMO mode)' : ''}`); if (process.env.NO_SCHEDULER !== '1') require('./lib/scheduler').start(); if (demo) demo.startNightly(); });
+if (require.main === module) app.listen(cfg.port, '0.0.0.0', () => { console.log(`Soccer Llamas running at http://localhost:${cfg.port}${cfg.demo ? ' (DEMO mode)' : ''}`); if (process.env.NO_SCHEDULER !== '1') require('./lib/scheduler').start(); if (demo) demo.startNightly(); });
 module.exports = app;
