@@ -36,6 +36,26 @@ r.use((req, res, next) => {
   res.status(401).send(layout({ title: 'Captain sign-in', flash: req.query.msg, body: `<div class="card"><h2>🧢 Captain sign-in</h2>${help('Open the captain link you were given (it signs you in). Or paste the captain key here.')}<form method="post" action="/admin/login"><label>Captain key</label><input name="key" autocomplete="off"><button class="primary big">Sign in</button></form></div>` }));
 });
 
+// ---------- Home: "season at a glance" so a new captain can see the job being done
+function glance(d) {
+  const lb = leaderboard(d, 5);
+  const ir = team.activeInjuries(d);
+  const fees = d.fees; const paid = fees.filter((f) => f.paidAt);
+  const owed = fees.filter((f) => !f.paidAt);
+  const sent = (d.messages || []).filter((m) => m.status === 'sent').sort((a, b) => String(b.sentAt).localeCompare(String(a.sentAt)));
+  const queued = (d.messages || []).filter((m) => m.status === 'queued').length;
+  const week = sent.filter((m) => new Date(m.sentAt) > new Date(Date.now() - 7 * 864e5)).length;
+  const lbl = (k) => (cfg.automation.steps.find((s) => s.key === k) || { label: k === 'irCheck' ? 'Ready to come back?' : k === 'reply' ? 'Auto-reply' : k }).label;
+  const handled = (d.inbound || []).filter((e) => e.status !== 'ignored').length;
+  return `<div class="card"><h2>🔭 Season at a glance</h2>${help('Everything below happened without you typing a single group text.')}
+    <div class="stat"><div><b>${sent.length}</b><span>messages sent for you (${week} this week)</span></div><div><b>${handled}</b><span>player emails answered automatically</span></div>
+    <div><b>$${paid.reduce((a, f) => a + f.amount, 0)}</b><span>fees collected · $${owed.reduce((a, f) => a + f.amount, 0)} still out</span></div><div><b>${queued}</b><span>reminders queued</span></div></div>
+    <h3>⭐ Llama Points top 5</h3><ol class="lb">${lb.map((x, i) => `<li><span class="rank">${i + 1}</span><span class="nm">${esc(x.player.name)}</span><span class="pt">${x.total}</span></li>`).join('')}</ol>
+    <h3>🩹 Injury list</h3>${ir.length ? `<ul class="clean small">${ir.map((i) => `<li><b>${esc(pname(i.playerId))}</b> — ${esc(i.injury || 'injury')}${i.expectedReturn ? ` · back ~${esc(T.fmtDate(i.expectedReturn))}` : ''}</li>`).join('')}</ul>` : '<p class="muted small">Nobody hurt.</p>'}
+    <h3>📨 Latest automatic messages</h3><ul class="clean small">${sent.slice(0, 4).map((m) => `<li>✉️ ${esc(T.fmtStamp(m.sentAt))} · ${esc(lbl(m.step))} → ${esc(pname(m.playerId))}</li>`).join('') || '<li class="muted">None yet</li>'}</ul>
+    <a class="btn" href="/admin/outbox">See all messages</a></div>`;
+}
+
 // ---------- Home
 r.get('/', (req, res) => {
   const d = db(); const on = d.settings.automationsOn !== false; const g = team.nextGame(d);
@@ -60,22 +80,27 @@ r.get('/', (req, res) => {
     ${sched.length ? `<h3>Coming up automatically</h3><ul class="clean small">${sched.map((x) => `<li>📨 ${esc(T.fmtGame(x.due))}: ${esc(x.step.label)}${x.queued ? ` (${x.queued} waiting)` : ''}</li>`).join('')}</ul>` : ''}
     <a class="btn" href="/admin/games/${g.id}" style="margin-top:8px">Open this game</a></div>` : ''}
   <div class="card"><h2>📝 To do</h2>${todo.length ? `<ul class="todo">${todo.map((t) => `<li>${t}</li>`).join('')}</ul>` : '<p class="muted">All caught up! 🎉</p>'}</div>
-  <div class="bigbtns">
-    <a href="/admin/games"><span>📅</span>Games<small>add, edit, scores, who came</small></a>
-    <a href="/admin/players"><span>👯</span>Players<small>links, add a player</small></a>
-    <a href="/admin/money"><span>💵</span>Fees & cards<small>who paid</small></a>
-    <a href="/admin/points"><span>⭐</span>Give points<small>subs, helpers, new players</small></a>
+  ${glance(d)}
+  <h3 class="grp">This week</h3><div class="bigbtns">
+    <a href="/admin/games"><span>📅</span>Games<small>who's in, scores, who came</small></a>
+    <a href="/admin/inbox"><span>📥</span>Inbox<small>replies answered for you</small></a>
+    <a href="/admin/outbox"><span>📨</span>Outbox<small>reminders sent &amp; queued</small></a>
+    <a href="/admin/injuries"><span>🩹</span>Injury list<small>${team.activeInjuries(d).length} on reserve</small></a>
+  </div>
+  <h3 class="grp">Team &amp; season</h3><div class="bigbtns">
+    <a href="/admin/players"><span>👯</span>Players<small>personal links, add a player</small></a>
+    <a href="/admin/money"><span>💵</span>Fees &amp; cards<small>who paid (no Venmo needed)</small></a>
+    <a href="/admin/points"><span>⭐</span>Llama Points<small>leaderboard, give points</small></a>
     <a href="/admin/pinnies"><span>🟨</span>Pinnies<small>who holds spares</small></a>
-    <a href="/admin/injuries"><span>🩹</span>Injuries<small>injury reserve</small></a>
-    <a href="/admin/health"><span>📈</span>Team health<small>what's working</small></a>
-    <a href="/admin/inbox"><span>📥</span>Inbox<small>replies handled for you</small></a>
-    <a href="/admin/outbox"><span>📨</span>Outbox<small>messages sent</small></a>
+    <a href="/admin/health"><span>📈</span>Team health<small>attendance chart, what works</small></a>
     <a href="/admin/calendar"><span>🗓️</span>Calendar preview<small>planned invites</small></a>
-    <a href="/admin/settings"><span>⚙️</span>Settings<small>captain, captain link</small></a>
+    <a href="/admin/settings"><span>⚙️</span>Settings<small>hand-over, check-in rules</small></a>
+    <a href="/dashboard"><span>📋</span>Team page<small>what players see</small></a>
   </div>`;
   const demoCard = cfg.demo ? `<div class="card" style="border:2px dashed var(--ink)"><h2>🧪 Demo controls</h2>${help('Visitors can change anything here. This puts all the sample data back the way it started (it also resets itself every night).')}<form method="post" action="/admin/demo-reset" onsubmit="return confirm('Reset all demo data?')"><button class="primary big">↺ Reset demo data</button></form></div>` : '';
   page(req, res, '/admin', 'Captain', `<div class="card"><h2>🧢 Hi, ${esc(d.settings.captainName)}!</h2>${help('This is the captain\'s corner. The app runs the weekly messages for you. Check the To-do list after each game.')}</div>` + demoCard + body);
 });
+for (const [a, to] of [['todo', '/admin'], ['ir', '/admin/injuries'], ['injury', '/admin/injuries'], ['fees', '/admin/money'], ['leaderboard', '/admin/points'], ['messages', '/admin/outbox'], ['roster', '/admin/players']]) r.get('/' + a, (req, res) => res.redirect(302, to));
 r.post('/demo-reset', (req, res) => { if (!cfg.demo) return back(res, '/admin', 'Only available in demo mode.'); require('../lib/demo').resetFromSnapshot(); back(res, '/admin', 'Demo data reset to the starting sample. 🦙'); });
 r.post('/automations', (req, res) => { db().settings.automationsOn = req.body.on === '1'; store.save(); back(res, '/admin', req.body.on === '1' ? 'Automatic messages turned ON.' : 'Automatic messages turned OFF. Nothing will be sent.'); });
 
@@ -164,6 +189,7 @@ r.post('/players/:id', (req, res) => {
 r.post('/players/:id/newlink', (req, res) => { if (cfg.demo) return back(res, '/admin/players', 'Making new links is turned off in the demo.'); const p = db().players.find((x) => x.id === req.params.id); if (p) { p.token = store.token(); store.save(); } back(res, '/admin/players', 'New link made. Send her the new one.'); });
 
 // ---------- Fees & player cards
+const feeSummary = (d) => { const paid = d.fees.filter((f) => f.paidAt); const tot = d.fees.reduce((a, f) => a + f.amount, 0); const got = paid.reduce((a, f) => a + f.amount, 0); return tot ? `<div class="stat"><div><b>$${got}</b><span>collected of $${tot}</span></div><div><b>${paid.length}/${d.fees.length}</b><span>players paid</span></div></div><div class="bar"><i style="width:${Math.round(100 * got / tot)}%"></i></div>` : ''; };
 r.get('/money', (req, res) => {
   const d = db();
   const rows = team.activePlayers(d).map((p) => {
@@ -173,7 +199,7 @@ r.get('/money', (req, res) => {
     const c = p.card || {};
     return `<tr><td><b>${esc(p.name)}</b>${fee}</td><td><form method="post" action="/admin/card/${p.id}"><select name="status" onchange="this.form.submit()"><option value="missing" ${c.status === 'missing' ? 'selected' : ''}>❌ No card yet</option><option value="before_asked" ${c.status === 'before_asked' ? 'selected' : ''}>⭐ Got it before I asked</option><option value="after_asked" ${c.status === 'after_asked' ? 'selected' : ''}>✅ Got it after I asked</option></select><noscript><button class="small">Save</button></noscript></form></td></tr>`;
   }).join('');
-  page(req, res, '/admin/money', 'Fees & cards', `<div class="card"><h2>💵 Fees & 🪪 player cards</h2>${help(`Tap "Paid today" when money comes in. Paying within ${cfg.feeOnTimeDays} days = +${cfg.points.feesOnTime.pts} points, after a reminder = +${cfg.points.feesAfterReminder.pts}. A player card before you ask = +${cfg.points.playerCardEarly.pts}.`)}
+  page(req, res, '/admin/money', 'Fees & cards', `<div class="card"><h2>💵 Fees & 🪪 player cards</h2>${feeSummary(d)}${help(`No Venmo hookup needed: players pay however they like (cash at the field, check, any app). You just tap "Paid today" when money comes in. Paying within ${cfg.feeOnTimeDays} days = +${cfg.points.feesOnTime.pts} points, after a reminder = +${cfg.points.feesAfterReminder.pts}. A player card before you ask = +${cfg.points.playerCardEarly.pts}.`)}
     <table><tr><th>Fees</th><th>Player card</th></tr>${rows}</table></div>
   <div class="card"><h2>📣 Ask everyone for fees</h2>${help('Adds a fee for every player. (Write your own message to the team; the date starts the 1-week clock.)')}
     <form method="post" action="/admin/money/request"><label>What for</label><input name="label" placeholder="Spring 2027 fees" required><div class="row"><div><label>Amount $</label><input type="number" name="amount" value="60"></div><div><label>Date asked</label><input type="date" name="date" value="${T.todayLocalStr()}"></div></div><button class="primary big">Add fee for everyone</button></form></div>`);
@@ -192,7 +218,9 @@ const AWARD = { sub_keeper: `🧤 Subbed or played keeper when we were short (+$
 r.get('/points', (req, res) => {
   const d = db(); const pts = computePoints(d);
   const list = d.awards.slice().sort((a, b) => String(b.date).localeCompare(String(a.date))).map((a) => `<tr><td><b>${esc(pname(a.playerId))}</b><br><span class="small">${esc(AWARD[a.type])}${a.note ? ' · ' + esc(a.note) : ''}</span></td><td class="small">${esc(T.fmtDay(a.date))}<form method="post" action="/admin/points/${a.id}/delete" onsubmit="return confirm('Remove these points?')"><button class="small">Remove</button></form></td></tr>`).join('');
-  page(req, res, '/admin/points', 'Give points', `<div class="card"><h2>⭐ Give points</h2>${help('Most points add up on their own (answering early, showing up, fees). Use this for the things only you see.')}
+  page(req, res, '/admin/points', 'Llama Points', `<div class="card"><h2>🏆 Leaderboard (what the team sees)</h2>${help('Only the top ' + cfg.leaderboardSize + ' are shown on the team page. Nobody is ranked at the bottom.')}<ol class="lb">${leaderboard(d).map((x, i) => `<li><span class="rank">${i + 1}</span><span class="nm">${esc(x.player.name)}</span><span class="pt">${x.total}</span></li>`).join('')}</ol>
+    <details><summary class="small">How points are earned</summary><ul class="clean small">${Object.values(cfg.points).map((x) => `<li>${x.pts > 0 ? '+' : ''}${x.pts} · ${esc(x.label)}</li>`).join('')}</ul></details></div>
+  <div class="card"><h2>⭐ Give points</h2>${help('Most points add up on their own (answering early, showing up, fees). Use this for the things only you see.')}
     <form method="post" action="/admin/points"><label>Who</label><select name="playerId">${playerOptions()}</select><label>For what</label><select name="type">${Object.entries(AWARD).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join('')}</select>
     <label>Which game (optional)</label><select name="gameId"><option value="">—</option>${gameOptions(team.pastGames(d)[0] && team.pastGames(d)[0].id)}</select><label>Note (optional)</label><input name="note" placeholder="e.g. brought the nets"><button class="primary big">Give points</button></form></div>
   <div class="card"><h2>🗂️ Points given</h2><table>${list}</table></div>
@@ -352,6 +380,8 @@ r.get('/settings', (req, res) => {
   <div class="card"><h2>🔑 Captain link</h2><p class="small">Your current captain link (keep it private, like a house key):</p><input readonly value="${esc(cfg.baseUrl)}/admin?key=${esc(d.settings.adminToken)}" onclick="this.select()">
     <form method="post" action="/admin/settings/reset" onsubmit="return confirm('Make a new captain link? The old one will stop working.')"><button class="big">Make a new captain link</button></form></div>
   <div class="card"><h2>📨 Team email account</h2><p class="small">Messages and calendar invites come from <b>${esc(cfg.teamAccount.email)}</b>. Whoever is captain should have the login for this account. (Changing it is a technical setup step — see the README.)</p></div>
+  <div class="card"><h2>✅ Self check-in (honor system)</h2><p class="small">Players tap <b>"I'm here"</b> on their own link from ${cfg.demo ? 'any time in game week (demo)' : `${cfg.checkin.opensMinutesBefore} min before kickoff`} until ${cfg.checkin.closesHoursAfter} h after. We trust each other: no GPS, no photos. If someone forgets or taps by mistake, fix it on the game page. Only "said In, didn't come, didn't tell anyone" costs points (${cfg.points.noShow.pts}).</p></div>
+  <div class="card"><h2>🔒 What's turned off${cfg.demo ? ' in this demo' : ''}</h2><p class="small">${cfg.demo ? 'No real emails, texts or calendar invites are sent. Messages are only written to the Outbox so you can read them.' : 'Real sending is controlled by the setup in the README.'}</p></div>
   <p style="text-align:center"><a class="btn" href="/admin/logout">Sign out</a></p>`);
 });
 r.post('/settings', (req, res) => { db().settings.captainName = (req.body.captainName || '').trim().slice(0, 60) || 'Captain'; if (req.body.captainEmail) db().settings.captainEmail = req.body.captainEmail.trim().slice(0, 120); store.save(); back(res, '/admin/settings', 'Saved.'); });

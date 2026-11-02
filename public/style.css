@@ -105,3 +105,5 @@ details > summary.btn::-webkit-details-marker{display:none}
 .landbtn b{display:block;font-size:19px}
 .landbtn small{display:block;color:var(--muted);font-size:14px;margin-top:2px}
 .landbtn:active{transform:translateY(2px);box-shadow:0 2px 0 var(--ink)}
+h3.grp{margin:18px 4px 8px;font-size:15px;text-transform:uppercase;letter-spacing:.04em;opacity:.7}
+.bar{height:10px;background:#eee;border-radius:6px;overflow:hidden;margin:8px 0 12px}.bar i{display:block;height:100%;background:#3a9d5d}

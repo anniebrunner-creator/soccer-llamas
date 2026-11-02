@@ -29,37 +29,42 @@ function seed({ force = false, now = new Date() } = {}) {
     const p = { id: `p${i + 1}`, name, email: `${slug}@example.com`, phone: '', channel: 'email', token: store.token(), role: subNames.includes(name) ? 'sub' : 'roster', canKeep: keepers.includes(name), active: true, pausedUntil: null, joinedAt: '2026-08-15', card: { status: 'missing', date: null } };
     db.players.push(p); P[name.split(' ')[1]] = p.id;
   });
-  const mt = (m, d, h, mi = 0) => zonedToUtc(2026, m, d, h, mi).toISOString();
+  // All dates are relative to "now" so the demo always looks mid-season (8 games played, 3 to go).
+  const today = T.localDate(now);
+  const toSun = (7 - today.dow) % 7 || 7; // next Sunday (today counts as played if it's Sunday)
+  const sunDay = (k) => T.shiftDay(today, toSun + 7 * k);
+  const at = (day, off, h, mi = 0) => { const x = T.shiftDay(day, off); return zonedToUtc(x.y, x.m, x.d, h, mi).toISOString(); };
+  const sun = (k, h, mi = 0) => at(sunDay(k), 0, h, mi);
+  const ymd = (day, off = 0) => { const x = T.shiftDay(day, off); return `${x.y}-${String(x.m).padStart(2, '0')}-${String(x.d).padStart(2, '0')}`; };
   const STENGER = { location: 'Stenger Soccer Complex', address: '11200 W 58th Ave, Arvada, CO' };
   const ADDEN = { location: 'Addenbrooke Park', address: '601 S. Garrison St., Lakewood, CO' };
-  const game = (gid, startsAt, loc, notes = '') => { db.games.push({ id: gid, startsAt, durationMin: 60, ...loc, opponent: '', notes, cancelled: false, calendarEventId: null, gameCardBy: null, result: null }); return gid; };
+  const OPP = ['Kickin\' Chickens', 'Net Ninjas', 'Grass Stains', 'Hat Trick Hens', 'Mud Puppies', 'Sole Sisters', 'Offside Otters', 'Pitch Please', 'Turf Turtles', 'Goal Diggers', 'Shin Diggers'];
+  const game = (gid, startsAt, loc, notes = '', opponent = '') => { db.games.push({ id: gid, startsAt, durationMin: 60, ...loc, opponent, notes, cancelled: false, calendarEventId: null, gameCardBy: null, result: null }); return gid; };
 
   // Past weeks (sample history so Team health has data)
-  const past = [
-    ['g_sep13', mt(9, 13, 11), STENGER], ['g_sep20', mt(9, 20, 11), STENGER], ['g_sep27', mt(9, 27, 9), ADDEN],
-    ['g_oct04', mt(10, 4, 11), STENGER], ['g_oct11', mt(10, 11, 9), ADDEN], ['g_oct18', mt(10, 18, 11), STENGER],
-  ].map(([gid, at, loc]) => game(gid, at, loc, 'Sample past game (simulated history).'));
-  const g1 = game('g_oct25', mt(10, 25, 11), STENGER);
-  const g2 = game('g_nov01', mt(11, 1, 11), STENGER, 'Clocks fall back the night before!');
-  const g3 = game('g_nov08', mt(11, 8, 9), ADDEN, '9 am — earlier kickoff, different field.');
+  const past = [-8, -7, -6, -5, -4, -3, -2, -1].map((k, i) => game(`g_w${i + 1}`, sun(k, i % 3 === 2 ? 9 : 11), i % 3 === 2 ? ADDEN : STENGER, 'Sample past game (simulated history).', OPP[i]));
+  const g1 = game('g_w9', sun(0, 11), STENGER, 'Bring both pinnie colors — we might be the away team.', OPP[8]);
+  const g2 = game('g_w10', sun(1, 9), ADDEN, '9 am — earlier kickoff, different field.', OPP[9]);
+  const g3 = game('g_w11', sun(2, 11), STENGER, 'Last regular-season game, then team happy hour 🍻', OPP[10]);
   for (const gid of [...past, g1, g2, g3]) db.games.find((g) => g.id === gid).gameCardBy = P.Tess;
+  const start = sunDay(-8);
 
-  // Fees: requested Sep 1
-  const req = mt(9, 1, 9);
-  const fee = (k, paidAt, reminderSentAt = null) => db.fees.push({ id: store.id('f'), playerId: P[k], label: 'Fall 2026 fees', amount: 60, requestedAt: req, paidAt, reminderSentAt });
-  fee('Sam', mt(9, 2, 12)); fee('Dana', mt(9, 3, 8)); fee('Tess', mt(9, 4, 20)); fee('Fran', mt(9, 1, 14));
-  fee('Elle', mt(9, 6, 9)); fee('Fi', mt(9, 7, 17));
-  fee('Pat', mt(9, 12, 10), mt(9, 10, 9)); fee('Maya', mt(9, 11, 19), mt(9, 10, 9)); fee('Paige', mt(9, 14, 8), mt(9, 10, 9));
-  fee('Priya', null, mt(9, 10, 9)); fee('Dee', null, mt(9, 10, 9)); fee('Stella', null);
-  for (const k of ['Sam', 'Fran', 'Tess', 'Fi', 'Elle']) db.players.find((p) => p.id === P[k]).card = { status: 'before_asked', date: '2026-08-28' };
-  for (const k of ['Dana', 'Pat', 'Maya', 'Paige']) db.players.find((p) => p.id === P[k]).card = { status: 'after_asked', date: '2026-09-15' };
+  // Fees: requested the week before the first game. Paid by cash, check or any app; the captain just taps "Paid".
+  const req = at(start, -6, 9);
+  const fee = (k, dPaid, dRem = null) => db.fees.push({ id: store.id('f'), playerId: P[k], label: 'Season fees', amount: 60, requestedAt: req, paidAt: dPaid == null ? null : at(start, -6 + dPaid, 12), reminderSentAt: dRem == null ? null : at(start, -6 + dRem, 9) });
+  fee('Sam', 1); fee('Dana', 2); fee('Tess', 3); fee('Fran', 0); fee('Elle', 5); fee('Fi', 6);
+  fee('Pat', 11, 9); fee('Maya', 10, 9); fee('Paige', 13, 9);
+  fee('Priya', null, 9); fee('Dee', null, 9); fee('Stella', null);
+  for (const k of ['Sam', 'Fran', 'Tess', 'Fi', 'Elle']) db.players.find((p) => p.id === P[k]).card = { status: 'before_asked', date: ymd(start, -10) };
+  for (const k of ['Dana', 'Pat', 'Maya', 'Paige']) db.players.find((p) => p.id === P[k]).card = { status: 'after_asked', date: ymd(start, 2) };
 
-  // Injury (Stella, since Oct 11)
-  db.injuries.push({ id: store.id('i'), playerId: P.Stella, injury: 'Sprained ankle', dateInjured: '2026-10-11', expectedReturn: '2026-11-08', cleared: false, clearedAt: null, addedBy: 'player', addedAt: mt(10, 12, 9) });
-  // A second, vaguer injury whose expected return already passed -> gets one 'Ready to come back?' check-in
-  db.injuries.push({ id: store.id('i'), playerId: P.Pat, injury: 'Tweaked hamstring', dateInjured: '2026-10-05', expectedReturn: '2026-10-18', cleared: false, clearedAt: null, addedBy: 'player', addedAt: mt(10, 5, 18) });
+  // Injury reserve: Stella (ankle, back for the next-next game), Pat (return date passed -> "Ready to come back?" check)
+  db.injuries.push({ id: store.id('i'), playerId: P.Stella, injury: 'Sprained ankle', dateInjured: ymd(sunDay(-3)), expectedReturn: ymd(sunDay(1)), cleared: false, clearedAt: null, addedBy: 'player', addedAt: at(sunDay(-3), 1, 9) });
+  db.injuries.push({ id: store.id('i'), playerId: P.Pat, injury: 'Tweaked hamstring', dateInjured: ymd(sunDay(-4)), expectedReturn: ymd(sunDay(-2)), cleared: false, clearedAt: null, addedBy: 'player', addedAt: at(sunDay(-4), 0, 18) });
+  db.injuries.push({ id: store.id('i'), playerId: P.Elle, injury: 'Sore knee', dateInjured: ymd(sunDay(-7)), expectedReturn: ymd(sunDay(-5)), cleared: true, clearedAt: at(sunDay(-5), -2, 19), addedBy: 'player', addedAt: at(sunDay(-7), 0, 15) });
   // One player paused messages (shows the pause feature)
-  Object.assign(db.players.find((p) => p.id === P.Dee), { pausedAt: mt(10, 14, 20), pausedUntil: mt(11, 2, 0) });
+  Object.assign(db.players.find((p) => p.id === P.Dee), { pausedAt: at(sunDay(-2), -3, 20), pausedUntil: at(sunDay(0), 2, 0) });
+  const mt = null; // (old fixed-date helper removed)
 
   // Simulate each past week through the real automation engine
   const prof = profiles(db, rng(42));
@@ -85,22 +90,27 @@ function seed({ force = false, now = new Date() } = {}) {
 
   // Awards from the last game
   const award = (k, type, date, note, gameId = null) => db.awards.push({ id: store.id('a'), playerId: P[k], type, date, note, gameId });
-  award('Maya', 'sub_keeper', mt(10, 18, 12), 'Kept goal 2nd half', 'g_oct18');
-  award('Dana', 'referral', '2026-08-20T18:00:00.000Z', 'Brought in Prototype Paige');
-  award('Fran', 'gameday_help', mt(10, 18, 12), 'Pinnies', 'g_oct18');
-  award('Sam', 'gameday_help', mt(10, 18, 12), 'Nets', 'g_oct18');
-  award('Tess', 'gameday_help', mt(10, 11, 10), 'Game card', 'g_oct11');
+  const L1 = past[7], L2 = past[6], L3 = past[5];
+  const gAt = (gid) => db.games.find((g) => g.id === gid).startsAt;
+  award('Maya', 'sub_keeper', gAt(L1), 'Kept goal 2nd half', L1);
+  award('Rae', 'sub_keeper', gAt(L3), 'Subbed in when we had 7', L3);
+  award('Dana', 'referral', at(start, -20, 12), 'Brought in Prototype Paige');
+  award('Fran', 'gameday_help', gAt(L1), 'Pinnies', L1);
+  award('Sam', 'gameday_help', gAt(L1), 'Nets', L1);
+  award('Tess', 'gameday_help', gAt(L2), 'Game card', L2);
+  award('Elle', 'gameday_help', gAt(L3), 'Corner flags', L3);
 
-  // This week (Oct 25): a few early replies via personal pages, before the Monday invite
-  const early = [['Sam', 'in', mt(10, 18, 15)], ['Tess', 'in', mt(10, 18, 16)], ['Fran', 'in', mt(10, 18, 17)],
-    ['Elle', 'in', mt(10, 18, 19)], ['Fi', 'in', mt(10, 18, 20)], ['Paige', 'maybe', mt(10, 18, 21)], ['Stella', 'out', mt(10, 18, 12)],
-    ['Maya', 'in', mt(10, 19, 6, 15)], ['Dana', 'maybe', mt(10, 19, 6, 20)]];
-  for (const [k, s, at] of early) if (new Date(at) <= now) setRsvp(db, P[k], g1, s, at, 'page');
-  for (const [k, s] of [['Sam', 'in'], ['Fran', 'in'], ['Tess', 'in'], ['Stella', 'out']]) setRsvp(db, P[k], g2, s, mt(10, 18, 18), 'page');
-  setRsvp(db, P.Fran, g3, 'in', mt(10, 18, 18, 5), 'page');
+  // Next game: a realistic mid-week picture (some In, a couple Maybe, injured Out, several not answered yet)
+  const wk = sunDay(0); const lastSun = sunDay(-1);
+  const early = [['Sam', 'in', at(lastSun, 0, 15)], ['Tess', 'in', at(lastSun, 0, 16)], ['Fran', 'in', at(lastSun, 0, 17)],
+    ['Elle', 'in', at(lastSun, 0, 19)], ['Fi', 'in', at(lastSun, 0, 20)], ['Paige', 'maybe', at(lastSun, 0, 21)], ['Stella', 'out', at(lastSun, 0, 12)],
+    ['Maya', 'in', at(wk, -6, 6, 15)], ['Dana', 'maybe', at(wk, -6, 6, 20)], ['Rae', 'in', at(wk, -6, 7, 5)]];
+  for (const [k, s, t] of early) if (new Date(t) <= now) setRsvp(db, P[k], g1, s, t, 'page');
+  for (const [k, s] of [['Sam', 'in'], ['Fran', 'in'], ['Tess', 'in'], ['Maya', 'in'], ['Stella', 'out']]) setRsvp(db, P[k], g2, s, at(lastSun, 0, 18), 'page');
+  setRsvp(db, P.Fran, g3, 'in', at(lastSun, 0, 18, 5), 'page');
 
   store.set(db);
-  db.pinnies = { holders: leaderboard(db, cfg.pinnies.holders).map((x) => x.player.id), recordedAt: mt(10, 18, 12, 30), note: 'Handed off after Oct 18 game' };
+  db.pinnies = { holders: leaderboard(db, cfg.pinnies.holders).map((x) => x.player.id), recordedAt: at(lastSun, 0, 12, 30), note: 'Handed off after last Sunday\'s game' };
   store.save();
   console.log(`Seeded ${store.FILE}: ${db.messages.length} message records, ${db.rsvps.length} RSVPs, ${db.checkins.length} check-ins`);
   console.log(`  Captain link:     ${cfg.baseUrl}/admin?key=${db.settings.adminToken}`);

@@ -76,6 +76,11 @@ function landing(req, res) {
     ${big('/demo/player', '🙋‍♀️', 'Be a player', `Try tapping In / Out, "I'm here", and the injury list as ${esc(p ? p.name : 'a sample player')}.`)}
     ${big('/demo/captain', '🧢', 'See the captain side', 'Games, fees, points, the inbox that answers itself, Team health and the Outbox.')}
   </div>
+  <div class="card"><h2>🧭 A 2-minute tour</h2><ol class="small">
+    <li><b>Team page</b>: next game headcount, top-5 Llama Points, injury list, who holds pinnies.</li>
+    <li><b>Be a player</b>: tap In / Out / Maybe, "I'm here" (self check-in), add yourself to the injury list, pause messages.</li>
+    <li><b>Captain side</b>: Season at a glance → Games → Inbox (replies answered for you) → Outbox (every reminder) → Fees → Points → Team health chart → Settings.</li></ol>
+    <p class="small muted">What the app automates: Monday invite, Wednesday nudge, Thursday last call, Friday sub ask, Saturday urgent/keeper alert, game-day reminder, check-in prompt and Monday recap. Plus reading replies, tracking fees and points.</p></div>
   <p class="hint" style="text-align:center">Everyone here is made up. ${cfg.demo ? 'The demo resets itself every night.' : ''}</p>` }));
 }
 app.get('/demo', landing);
