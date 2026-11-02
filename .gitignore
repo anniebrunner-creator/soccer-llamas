@@ -1,0 +1,11 @@
+node_modules/
+data/*
+!data/.gitkeep
+*.log
+*.pid
+.env
+.env.*
+screenshots/
+.DS_Store
+public-url.txt
+*.csv

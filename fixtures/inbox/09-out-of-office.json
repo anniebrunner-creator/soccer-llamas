@@ -1,0 +1,11 @@
+{
+  "from": "Placeholder Pat <placeholder.pat@example.com>",
+  "subject": "Automatic reply: Llamas play Sun, Oct 25",
+  "threadId": "t-pat",
+  "headers": {
+    "Auto-Submitted": "auto-replied",
+    "X-Autoreply": "yes"
+  },
+  "body": "I'm out of the office until Oct 26 with limited access to email.",
+  "messageId": "<fixture-09-out-of-office@example.com>"
+}

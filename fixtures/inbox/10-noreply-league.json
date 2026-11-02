@@ -1,0 +1,10 @@
+{
+  "from": "League Notifications <noreply@league.example.org>",
+  "subject": "Schedule update: Women's B",
+  "threadId": "t-league",
+  "headers": {
+    "List-Id": "womens-b.league.example.org"
+  },
+  "body": "Schedules have been updated. Do not reply to this email.",
+  "messageId": "<fixture-10-noreply-league@example.com>"
+}
