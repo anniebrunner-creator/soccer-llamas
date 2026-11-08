@@ -69,7 +69,6 @@ r.get('/', (req, res) => {
   }
   const refs = (d.pendingReferrals || []).filter((x) => x.status === 'pending').length; if (refs) todo.push(`<a href="/admin/inbox">${refs} friend referral(s) to confirm</a> once they play`);
   const unpaid = d.fees.filter((f) => !f.paidAt).length; if (unpaid) todo.push(`<a href="/admin/money">${unpaid} fee(s) not paid yet</a>`);
-  const pin = team.pinnieStatus(d); if (!pin.upToDate) todo.push(`<a href="/admin/pinnies">Hand the spare pinnies to ${pin.shouldHold.map((p) => esc(p.name)).join(' & ')}</a>`);
   const sched = g ? auto.schedule(d, g).filter((x) => !x.run || x.queued).slice(0, 3) : [];
   const body = `
   <div class="card kill ${on ? 'on' : 'off'}"><div><b style="font-size:18px">${on ? '✅ Automatic messages are ON' : '⛔ Automatic messages are OFF'}</b><div class="small">${on ? 'Invites, reminders and recaps go out on their own.' : 'Nothing will be sent until you turn this back on.'}</div></div>
@@ -91,7 +90,7 @@ r.get('/', (req, res) => {
     <a href="/admin/players"><span>👯</span>Players<small>personal links, add a player</small></a>
     <a href="/admin/money"><span>💵</span>Fees &amp; cards<small>who paid (no Venmo needed)</small></a>
     <a href="/admin/points"><span>⭐</span>Llama Points<small>leaderboard, give points</small></a>
-    <a href="/admin/pinnies"><span>🟨</span>Pinnies<small>who holds spares</small></a>
+    <a href="/admin/pinnies"><span>🟨</span>Pinnies<small>Amber/Kat keep them</small></a>
     <a href="/admin/health"><span>📈</span>Team health<small>attendance chart, what works</small></a>
     <a href="/admin/calendar"><span>🗓️</span>Calendar preview<small>planned invites</small></a>
     <a href="/admin/settings"><span>⚙️</span>Settings<small>hand-over, check-in rules</small></a>
@@ -132,14 +131,19 @@ r.get('/games/:id', (req, res) => {
     if (!rv && !c && p.role === 'sub') return '';
     let state = c ? '<span class="pill good">✅ came</span>' : rv && rv.noShow ? '<span class="pill bad">no-show</span>' : rv && rv.toldTeam ? '<span class="pill maybe">told the team</span>' : '';
     const act = (a, label) => `<form class="inline" method="post" action="/admin/games/${g.id}/attendance"><input type="hidden" name="playerId" value="${p.id}"><input type="hidden" name="action" value="${a}"><button class="small">${label}</button></form>`;
-    return `<tr><td><b>${esc(p.name)}</b>${p.role === 'sub' ? ' <span class="tag">sub</span>' : ''}<br><span class="pill ${rv ? rv.status : 'none'}">${rv ? statusWord[rv.status] : 'no reply'}</span> ${state}</td><td style="text-align:right">${started ? (c ? act('clear', 'Undo') : `${act('checkin', '✅ Came')} ${rv && rv.status === 'in' ? `${act('noshow', '❌ No-show')} ${act('told', 'Told us')}` : ''}`) : ''}</td></tr>`;
+    const note = rv && rv.status === 'out' ? (rv.declineReason ? `<div class="decline-note">${esc(rv.declineReason)}</div>` : '<div class="small muted">No note</div>') : '';
+    return `<tr><td><b>${esc(p.name)}</b>${p.role === 'sub' ? ' <span class="tag">sub</span>' : ''}<br><span class="pill ${rv ? rv.status : 'none'}">${rv ? statusWord[rv.status] : 'no reply'}</span> ${state}${note}</td><td style="text-align:right">${started ? (c ? act('clear', 'Undo') : `${act('checkin', '✅ Came')} ${rv && rv.status === 'in' ? `${act('noshow', '❌ No-show')} ${act('told', 'Told us')}` : ''}`) : ''}</td></tr>`;
   }).join('');
   const res_ = g.result || {};
   page(req, res, '/admin/games', 'Game', `
   <div class="card hero"><h2>⚽ ${esc(T.fmtGame(g.startsAt))}</h2><div class="where">${esc(g.location)}</div></div>
   ${started ? `<div class="card"><h2>🏁 Score</h2>${help('Enter it after the game. It shows in the Monday recap and on Team health.')}
     <form method="post" action="/admin/games/${g.id}/result"><div class="row"><div><label>Us</label><input type="number" min="0" name="us" value="${res_.us ?? ''}"></div><div><label>Them</label><input type="number" min="0" name="them" value="${res_.them ?? ''}"></div></div><button class="primary big">Save score</button></form></div>` : ''}
-  <div class="card"><h2>🙋 Who's coming / who came</h2>${help(started ? 'Players check themselves in. Fix it here if someone forgot. "No-show" costs −3 points; "Told us" means no penalty.' : 'Players answer with their own links. After kickoff you can fix who came here.')}<table>${rows}</table></div>
+  <div class="card"><h2>🙋 Who's coming / who came</h2>${help(started ? 'Players check themselves in. Fix it here if someone forgot. "No-show" costs −3 points; "Told us" means no penalty.' : 'Players answer with their own links. After kickoff you can fix who came here.')}
+    <p class="privacy">${esc(cfg.demo
+      ? 'If someone said Out, an optional note may show here. This demo has no private captain login — these pages use the public demo key, and every player is made up. A blank note is normal. Notes do not change points, reminders, or injury reserve.'
+      : 'If someone said Out, an optional note shows on this attendance page only. Other players and the public team page do not include it. Anyone with the captain link can read it. A blank note is normal and does not change points, reminders, or injury reserve.')}</p>
+    <table>${rows}</table></div>
   <div class="card"><h2>✏️ Change game details</h2><form method="post" action="/admin/games/${g.id}">${gameForm(g)}<button class="primary big">Save changes</button></form></div>`);
 });
 r.post('/games/:id', (req, res) => { const g = db().games.find((x) => x.id === req.params.id); if (g) { readGame(req.body, g); store.save(); } back(res, `/admin/games/${req.params.id}`, 'Saved.'); });
@@ -235,20 +239,9 @@ r.post('/points', (req, res) => {
 r.post('/points/:id/delete', (req, res) => { db().awards = db().awards.filter((a) => a.id !== req.params.id); store.save(); back(res, '/admin/points', 'Removed.'); });
 
 // ---------- Pinnies
+// Custody is not assigned from Llama Points, and this page cannot reassign it.
 r.get('/pinnies', (req, res) => {
-  const d = db(); const s = team.pinnieStatus(d);
-  page(req, res, '/admin/pinnies', 'Pinnies', `<div class="card"><h2>🟨 Spare pinnies</h2>${help(`The top ${cfg.pinnies.holders} on the leaderboard each hold ${cfg.pinnies.sparesEach} spare pinnies. When the top changes, hand them over and tap the button.`)}
-    <h3>Holding them now</h3><div>${s.holders.map((p) => `<span class="chip y">${esc(p.name)}</span>`).join('') || '<span class="muted">nobody recorded</span>'}</div>
-    <div class="small muted">${s.recordedAt ? 'Recorded ' + esc(T.fmtStamp(s.recordedAt)) : ''} ${esc(d.pinnies.note || '')}</div>
-    <h3>Should hold them (current top ${cfg.pinnies.holders})</h3><div>${s.shouldHold.map((p) => `<span class="chip y">${esc(p.name)}</span>`).join('')}</div>
-    ${s.upToDate ? '<p class="banner comfy">👍 All set — the right people have them.</p>' : `<form method="post" action="/admin/pinnies"><input type="hidden" name="mode" value="top"><button class="primary big">They've been handed over ✔</button></form>`}</div>
-  <div class="card"><h2>✍️ Record who has them (by hand)</h2><form method="post" action="/admin/pinnies">${team.activePlayers(d).map((p) => `<label><input type="checkbox" name="holders" value="${p.id}" ${s.holders.some((h) => h.id === p.id) ? 'checked' : ''}>${esc(p.name)}</label>`).join('')}<label>Note</label><input name="note"><button class="big">Save</button></form></div>`);
-});
-r.post('/pinnies', (req, res) => {
-  const d = db();
-  const holders = req.body.mode === 'top' ? leaderboard(d, cfg.pinnies.holders).map((x) => x.player.id) : [].concat(req.body.holders || []);
-  d.pinnies = { holders, recordedAt: new Date().toISOString(), note: req.body.mode === 'top' ? 'Handed to the leaderboard top' : (req.body.note || '').trim() };
-  store.save(); back(res, '/admin/pinnies', 'Pinnie holders saved.');
+  page(req, res, '/admin/pinnies', 'Pinnies', `<div class="card"><h2>🟨 Spare pinnies</h2><p>${esc(cfg.pinnies.custody)}</p></div>`);
 });
 
 // ---------- Injuries
@@ -381,7 +374,7 @@ r.get('/settings', (req, res) => {
     <form method="post" action="/admin/settings/reset" onsubmit="return confirm('Make a new captain link? The old one will stop working.')"><button class="big">Make a new captain link</button></form></div>
   <div class="card"><h2>📨 Team email account</h2><p class="small">Messages and calendar invites come from <b>${esc(cfg.teamAccount.email)}</b>. Whoever is captain should have the login for this account. (Changing it is a technical setup step — see the README.)</p></div>
   <div class="card"><h2>✅ Self check-in (honor system)</h2><p class="small">Players tap <b>"I'm here"</b> on their own link from ${cfg.demo ? 'any time in game week (demo)' : `${cfg.checkin.opensMinutesBefore} min before kickoff`} until ${cfg.checkin.closesHoursAfter} h after. We trust each other: no GPS, no photos. If someone forgets or taps by mistake, fix it on the game page. Only "said In, didn't come, didn't tell anyone" costs points (${cfg.points.noShow.pts}).</p></div>
-  <div class="card"><h2>🔒 What's turned off${cfg.demo ? ' in this demo' : ''}</h2><p class="small">${cfg.demo ? 'No real emails, texts or calendar invites are sent. Messages are only written to the Outbox so you can read them.' : 'Real sending is controlled by the setup in the README.'}</p></div>
+  <div class="card"><h2>🔒 What's turned off${cfg.demo ? ' in this demo' : ''}</h2><p class="small">${cfg.demo ? 'No real emails, texts or calendar invites are sent. Messages are only written to the Outbox so you can read them. Out-notes on a game page are not a private channel here: anyone can open the captain pages with the public demo key, and all players are made up.' : 'Real sending is controlled by the setup in the README. Out-notes are visible to anyone who has the captain link; there is no separate account login.'}</p></div>
   <p style="text-align:center"><a class="btn" href="/admin/logout">Sign out</a></p>`);
 });
 r.post('/settings', (req, res) => { db().settings.captainName = (req.body.captainName || '').trim().slice(0, 60) || 'Captain'; if (req.body.captainEmail) db().settings.captainEmail = req.body.captainEmail.trim().slice(0, 120); store.save(); back(res, '/admin/settings', 'Saved.'); });

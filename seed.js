@@ -5,8 +5,7 @@ const path = require('path');
 const store = require('./lib/store');
 const T = require('./lib/time');
 const { zonedToUtc } = T;
-const { setRsvp } = require('./lib/actions');
-const { leaderboard } = require('./lib/points');
+const { setRsvp, updateDeclineReason } = require('./lib/actions');
 const team = require('./lib/team');
 const { simulateGame, profiles, rng } = require('./lib/sim');
 const cfg = require('./config');
@@ -106,11 +105,13 @@ function seed({ force = false, now = new Date() } = {}) {
     ['Elle', 'in', at(lastSun, 0, 19)], ['Fi', 'in', at(lastSun, 0, 20)], ['Paige', 'maybe', at(lastSun, 0, 21)], ['Stella', 'out', at(lastSun, 0, 12)],
     ['Maya', 'in', at(wk, -6, 6, 15)], ['Dana', 'maybe', at(wk, -6, 6, 20)], ['Rae', 'in', at(wk, -6, 7, 5)]];
   for (const [k, s, t] of early) if (new Date(t) <= now) setRsvp(db, P[k], g1, s, t, 'page');
+  const stellaNext = db.rsvps.find((r) => r.playerId === P.Stella && r.gameId === g1 && r.status === 'out');
+  if (stellaNext) updateDeclineReason(stellaNext, 'Sample note: visiting family (made-up; not a health detail).');
   for (const [k, s] of [['Sam', 'in'], ['Fran', 'in'], ['Tess', 'in'], ['Maya', 'in'], ['Stella', 'out']]) setRsvp(db, P[k], g2, s, at(lastSun, 0, 18), 'page');
   setRsvp(db, P.Fran, g3, 'in', at(lastSun, 0, 18, 5), 'page');
 
   store.set(db);
-  db.pinnies = { holders: leaderboard(db, cfg.pinnies.holders).map((x) => x.player.id), recordedAt: at(lastSun, 0, 12, 30), note: 'Handed off after last Sunday\'s game' };
+  db.pinnies = { holders: [], recordedAt: null, note: '' };
   store.save();
   console.log(`Seeded ${store.FILE}: ${db.messages.length} message records, ${db.rsvps.length} RSVPs, ${db.checkins.length} check-ins`);
   console.log(`  Captain link:     ${cfg.baseUrl}/admin?key=${db.settings.adminToken}`);
