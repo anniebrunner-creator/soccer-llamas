@@ -6,7 +6,7 @@ const store = require('./lib/store');
 const T = require('./lib/time');
 const team = require('./lib/team');
 const { computePoints, leaderboard } = require('./lib/points');
-const { setRsvp, checkIn } = require('./lib/actions');
+const { setRsvp, checkIn, declinePrivacyCopy, updateDeclineReason } = require('./lib/actions');
 const { esc, mapLink, chips, statusWord, layout } = require('./lib/views');
 
 const fresh = !fs.existsSync(store.FILE);
@@ -57,11 +57,8 @@ function irBlock(d, { compact = false } = {}) {
   }).join('')}</ul><p class="getwell">Get well soon, llamas! The herd is saving your spot. 🌼</p>` : '<p class="muted small">Everyone is healthy! 🦙💪</p>'}
   ${compact ? '' : '<p class="hint">Players share only what they\'re comfortable with. Injured players get no "are you playing?" messages until they\'re cleared.</p>'}</div>`;
 }
-function pinnieBlock(d) {
-  const s = team.pinnieStatus(d);
-  return `<div class="card"><h2>🟨 Spare pinnies</h2><p class="small">Our top ${cfg.pinnies.holders} point-earners each hold ${cfg.pinnies.sparesEach} spare pinnies.</p>
-  <div>${s.holders.length ? s.holders.map((p) => `<span class="chip y">${esc(p.name)}</span>`).join('') : '<span class="muted small">not recorded yet</span>'}</div>
-  ${!s.upToDate && s.shouldHold.length ? `<p class="hint">Next handoff → ${s.shouldHold.map((p) => esc(p.name)).join(', ')}</p>` : ''}</div>`;
+function pinnieBlock() {
+  return `<div class="card"><h2>🟨 Spare pinnies</h2><p>${esc(cfg.pinnies.custody)}</p></div>`;
 }
 
 // ---------- Demo landing (DEMO=1 serves it at / ; /demo always works)
@@ -77,7 +74,7 @@ function landing(req, res) {
     ${big('/demo/captain', '🧢', 'See the captain side', 'Games, fees, points, the inbox that answers itself, Team health and the Outbox.')}
   </div>
   <div class="card"><h2>🧭 A 2-minute tour</h2><ol class="small">
-    <li><b>Team page</b>: next game headcount, top-5 Llama Points, injury list, who holds pinnies.</li>
+    <li><b>Team page</b>: next game headcount, top-5 Llama Points, injury list. Amber/Kat keep team pinnies.</li>
     <li><b>Be a player</b>: tap In / Out / Maybe, "I'm here" (self check-in), add yourself to the injury list, pause messages.</li>
     <li><b>Captain side</b>: Season at a glance → Games → Inbox (replies answered for you) → Outbox (every reminder) → Fees → Points → Team health chart → Settings.</li></ol>
     <p class="small muted">What the app automates: Monday invite, Wednesday nudge, Thursday last call, Friday sub ask, Saturday urgent/keeper alert, game-day reminder, check-in prompt and Monday recap. Plus reading replies, tracking fees and points.</p></div>
@@ -102,7 +99,7 @@ app.get(cfg.demo ? '/dashboard' : ['/', '/dashboard'], (req, res) => {
   <div class="card"><h2>🏆 Llama Points — top ${cfg.leaderboardSize}</h2>
     ${lb.length ? `<ol class="lb">${lb.map((x, i) => `<li><span class="rank">${i + 1}</span><span class="nm">${esc(x.player.name)}</span><span class="pt">${x.total}</span></li>`).join('')}</ol>` : '<p class="muted">No points yet.</p>'}
     <p class="hint">Earn points by RSVPing early (+${cfg.points.rsvpByThursday.pts} by Thursday night), showing up, paying on time, helping on game day and bringing friends. Your own score is on your personal page.</p></div>
-  ${pinnieBlock(d)}`;
+  ${pinnieBlock()}`;
   res.send(layout({ title: 'Dashboard', body, flash: req.query.msg, captain: d.settings.captainName }));
 });
 
@@ -123,14 +120,32 @@ app.get('/p/:token', findPlayer, (req, res) => {
   const myActive = myInj.find((i) => !i.cleared);
   const base = `/p/${p.token}`;
 
+  const noteForm = (g, r) => {
+    const gid = esc(g.id);
+    return `<form method="post" action="${base}/rsvp" class="why-form">
+      <input type="hidden" name="gameId" value="${gid}"><input type="hidden" name="status" value="out"><input type="hidden" name="note" value="1">
+      <label for="why-${gid}">Why can’t you make it? <span class="muted">optional</span></label>
+      <textarea id="why-${gid}" name="declineReason" maxlength="500" rows="3" placeholder="Only if you want to — a few words is plenty.">${esc(r.declineReason || '')}</textarea>
+      <p class="privacy">${esc(declinePrivacyCopy(!!cfg.demo))}</p>
+      <button class="small">Save note</button></form>
+      ${r.declineReason ? `<form method="post" action="${base}/rsvp"><input type="hidden" name="gameId" value="${gid}"><input type="hidden" name="status" value="out"><input type="hidden" name="note" value="1"><input type="hidden" name="clearReason" value="1"><button class="small">Clear note</button></form>` : ''}`;
+  };
   const rsvpCards = upcoming.map((g) => {
     const r = team.rsvpFor(d, g.id, p.id); const w = T.rsvpWindows(g.startsAt);
     const early = now <= w.thursdayEnd;
     const btn = (s, label) => `<button name="status" value="${s}" class="${r && r.status === s ? 'sel-' + s : ''}">${label}</button>`;
     const h = team.headcount(d, g);
+    const gid = esc(g.id);
     return `<div class="game"><b>${esc(T.fmtGame(g.startsAt))}</b><div class="where">${esc(g.location)}</div>
-      <form method="post" action="${base}/rsvp"><input type="hidden" name="gameId" value="${g.id}"><div class="btns">${btn('in', '👍 In')}${btn('maybe', '🤔 Maybe')}${btn('out', '👎 Out')}</div></form>
+      <form method="post" action="${base}/rsvp"><input type="hidden" name="gameId" value="${gid}"><div class="btns">${btn('in', '👍 In')}${btn('maybe', '🤔 Maybe')}${btn('out', '👎 Out')}</div></form>
+      ${r && r.status === 'out' ? noteForm(g, r) : ''}
       <div class="hint">${r ? `You said <b>${statusWord[r.status]}</b> · ${esc(T.fmtStamp(r.updatedAt))}. ` : ''}${early ? `Reply by ${esc(T.fmtDay(w.thursdayEnd.getTime() - 1))} 11:59 pm for +${cfg.points.rsvpByThursday.pts} pts.` : now <= w.dayBeforeEnd && now >= w.dayBeforeStart ? `Reply today for +${cfg.points.rsvpSaturday.pts} pt.` : ''} So far: ${h.in.length} in.</div></div>`;
+  }).join('');
+  const pastOutCards = team.pastGames(d, now).filter((g) => (team.rsvpFor(d, g.id, p.id) || {}).status === 'out').slice(0, 4).map((g) => {
+    const r = team.rsvpFor(d, g.id, p.id);
+    return `<div class="game"><b>${esc(T.fmtGame(g.startsAt))}</b><div class="where">${esc(g.location)}</div>
+      <div class="hint">This game already started, so In / Out stays as it is. You can still edit or clear your note.</div>
+      ${noteForm(g, r)}</div>`;
   }).join('');
 
   const checkinCards = checkable.map((g) => {
@@ -149,7 +164,7 @@ app.get('/p/:token', findPlayer, (req, res) => {
     <div class="small muted">Your Llama Points</div><div class="score">${pts.total}</div>
     <details style="margin-top:10px"><summary>How I earned them</summary><table>${pts.items.map((i) => `<tr><td>${esc(i.label)}${i.note ? ` <span class="muted small">(${esc(i.note)})</span>` : ''}</td><td style="text-align:right;font-weight:800">${i.pts > 0 ? '+' : ''}${i.pts}</td></tr>`).join('') || '<tr><td class="muted">Nothing yet — RSVP early to start!</td></tr>'}</table></details>
     <p class="hint">Bookmark this page — it's your personal link (no password). Don't share it.</p></div>
-  <div class="card"><h2>🗳️ Are you playing?</h2>${rsvpCards || '<p class="muted">No upcoming games.</p>'}</div>
+  <div class="card"><h2>🗳️ Are you playing?</h2>${rsvpCards || '<p class="muted">No upcoming games.</p>'}${pastOutCards}</div>
   ${checkinCards ? `<div class="card"><h2>📍 Check in</h2><p class="small">At the field (or after), tap to mark yourself present. Honor system!</p>${checkinCards}</div>` : ''}
   ${missedCards ? `<div class="card"><h2>🙈 Missed a game?</h2>${missedCards}</div>` : ''}
   <div class="card"><h2>🧤 Keeper</h2><form method="post" action="${base}/keeper"><label><input type="checkbox" name="canKeep" value="1" ${p.canKeep ? 'checked' : ''} onchange="this.form.submit()">I'm willing to play keeper</label><noscript><button class="small">Save</button></noscript></form></div>
@@ -174,10 +189,27 @@ app.get('/p/:token', findPlayer, (req, res) => {
 app.post('/p/:token/rsvp', findPlayer, (req, res) => {
   const d = db(); const g = d.games.find((x) => x.id === req.body.gameId);
   const status = req.body.status;
-  if (!g || !['in', 'out', 'maybe'].includes(status)) return back(res, `/p/${req.player.token}`, 'Something went wrong — try again.');
-  if (new Date(g.startsAt) <= new Date()) return back(res, `/p/${req.player.token}`, 'That game already started — text the captain.');
+  const backTo = `/p/${req.player.token}`;
+  if (!g || !['in', 'out', 'maybe'].includes(status)) return back(res, backTo, 'Something went wrong — try again.');
+  // Note edit/clear is separate from the RSVP buttons. It does not change status,
+  // points, injury reserve, or messages. Allowed after kickoff so a player can
+  // remove her own note; status changes stay locked once the game has started.
+  if (req.body.note === '1') {
+    const current = team.rsvpFor(d, g.id, req.player.id);
+    const had = !!(current && current.declineReason);
+    const raw = req.body.clearReason === '1' ? '' : req.body.declineReason;
+    const result = updateDeclineReason(current, raw);
+    if (!result.ok) return back(res, backTo, result.error);
+    store.save();
+    const saved = cfg.demo
+      ? 'Note saved. In this demo it can show on the captain attendance page (public demo, made-up players).'
+      : 'Note saved. It shows on the captain attendance page, not to other players.';
+    const cleared = had ? 'Note cleared. You’re still Out.' : 'You’re Out. No note saved — that’s completely fine.';
+    return back(res, backTo, result.value ? saved : cleared);
+  }
+  if (new Date(g.startsAt) <= new Date()) return back(res, backTo, 'That game already started — text the captain.');
   setRsvp(d, req.player.id, g.id, status); store.save();
-  back(res, `/p/${req.player.token}`, { in: "You're In! 🦙⚽", out: 'Got it — you\'re Out. Thanks for telling us!', maybe: 'Marked Maybe. Update when you know!' }[status]);
+  back(res, backTo, { in: "You're In! 🦙⚽", out: 'Got it — you\'re Out. Thanks for telling us!', maybe: 'Marked Maybe. Update when you know!' }[status]);
 });
 app.post('/p/:token/checkin', findPlayer, (req, res) => {
   const d = db(); const g = d.games.find((x) => x.id === req.body.gameId);

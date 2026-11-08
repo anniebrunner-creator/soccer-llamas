@@ -23,7 +23,7 @@ login for the **team email account** (`llamas.soccer.team@gmail.com`).
 | **Players** | Copy a player's personal link to send her. Add a new player (and who brought her). |
 | **Fees & cards** | Tap **Paid today** when money arrives. Set each player-card status. |
 | **Give points** | For things only you see: subbing or keeping when we're short, game-day help, bringing a new player. |
-| **Pinnies** | Shows who should hold the spare pinnies (the top 2). Tap the button after you hand them over. |
+| **Pinnies** | Amber/Kat keep team pinnies. Llama Points do not decide who keeps them. |
 | **Injuries** | Injury reserve. Players usually add themselves. |
 | **Team health** | How we're doing: answers by Thursday, players per game, no-shows, which messages work. |
 | **Outbox** | Every automatic message, with the reason any were skipped. |
@@ -57,6 +57,8 @@ When a friend actually plays, tap **She played: +10** on Inbox.
 
 **Players** just bookmark their personal link: tap In / Maybe / Out, tap "I'm here" at the game,
 put themselves on injury reserve, see their own points, and pause messages if they want.
+Saying **Out** can include an optional note ("Why can’t you make it?"). Blank is fine. It does not
+change points, reminders, or injury reserve, and it is not a place for health details.
 
 ---
 
@@ -103,8 +105,13 @@ RSVP (In or Out) by Thursday 11:59 pm MT before the game +3 · on the day before
 said In, no-show, didn't tell anyone −3 (only when the captain marks a no-show) · sub/keeper when short (captain) +5 ·
 fees paid within 7 days, no reminder +5 · paid after a reminder +2 · player card before being asked +5 ·
 brought a new player +10 · game-day help +2. The public board shows the top 5 with a score above 0. Nobody is ranked at the
-bottom. Each player sees her own total and breakdown on her page. Spare pinnies go to the top `pinnies.holders` (2).
+bottom. Each player sees her own total and breakdown on her page. Amber/Kat keep team pinnies. Points do not hand out that custody.
 An RSVP counts by its first In/Out answer. In/Out "at kickoff" uses the answer as of game start.
+
+### Optional Out note
+A player who says **Out** may save a short optional note on that game (`rsvp.declineReason`, max 500 characters). Whitespace-only is stored as no note. She can edit or clear it on her own page (that does not add another RSVP history entry). Changing the RSVP to **In** or **Maybe** clears the note so it cannot linger. One-tap email links and inbox/calendar RSVP updates do not copy message text into the note.
+
+The note is rendered only in two places: that player's own page, and the captain **Games → game → Who's coming / who came** table (captain key required, same check as the rest of `/admin`). It is not included in the public dashboard, other players' pages, the calendar payload, or `GET /api/summary` (even with the captain key). Nothing in points, reminders, injury reserve, or outbound mail reads the note. A note that mentions an injury does not put her on IR.
 
 ### Automatic messages (the improvement loop)
 - **Define:** the goal is more players at every game (≥ 8 to play, 11 for a comfy bench) and a climb back up the B division.
@@ -131,7 +138,8 @@ An RSVP counts by its first In/Out answer. In/Out "at kickoff" uses the answer a
 `lib/calendar.js` → `planSync(db)` writes one Google Calendar API v3 event per upcoming game to `data/calendar-plan.json`. Each event is organized by `config.teamAccount.email`, has every active player as an attendee, uses times with `timeZone: America/Denver`, and stores `extendedProperties.private.llamasGameId`. Mapping: In↔`accepted`, Out↔`declined`, Maybe↔`tentative`, none↔`needsAction`. `applyGoogleResponses()` maps invite replies back to RSVPs (the newer change wins). `applyPlan()` is where real `events.insert/patch` (with `sendUpdates: 'all'`) would go. It currently throws. No API calls are made.
 
 ### Limitations
-- Not deployed anywhere. Email, SMS and Calendar are stubs. All people and history are fake. The scoring formula, sample results and standings are simulated.
+- Not deployed anywhere by this repo's own instructions. Email, SMS and Calendar are stubs. All people and history are fake. The scoring formula, sample results and standings are simulated. A separate Render demo may be running; see [DEPLOY.md](DEPLOY.md). Do not treat that demo as private.
+- **Out notes are not a private medical channel.** The app has no user accounts. Captain pages trust a bearer link (`/admin?key=...` or the `llamas_captain` cookie). In **demo mode** that key is the published value `demo-captain`, and `/demo/captain` signs any visitor in, so notes on the attendance page are visible to anyone clicking around the demo. Demo data is synthetic; do not type real health information. The local prototype's default key `llama-admin-dev` is printed in this README, so it is not a secret until a captain sets `ADMIN_TOKEN` or resets the link in Settings. This change does not add a login, and it does not pretend the demo key is authentication.
 - Personal links and the captain link are bearer secrets: anyone with the link can act as that person. Reset them from Captain → Players / Settings.
 - One-tap email links record on a GET request. Some corporate email scanners "click" links, so a production version should use a confirm step or signed single-use links.
 - JSON-file store: fine for one process and one team. Use SQLite or Postgres for real use. Run only **one** instance, or messages could go out twice.
@@ -157,6 +165,7 @@ An RSVP counts by its first In/Out answer. In/Out "at kickoff" uses the answer a
 - A banner on every page: "Demo with made-up players. Nothing here is real and no messages are sent."
 - Outbound email, SMS, Gmail polling, the LLM classifier and Google Calendar are hard-disabled, whatever the other settings say. The scheduler and inbox still run, but only into the local Outbox.
 - `/` is a landing page with three big buttons. `/dashboard` is the team dashboard, `/demo/player` opens a sample player (Faux Fran) and `/demo/captain` signs in with the demo-only captain key (`demo-captain`). The dev/real captain key doesn't work on the demo, and the demo key doesn't work on the dev instance.
+- Optional Out notes are part of the click-around (a made-up sample note is seeded). They show on that player's page and on the captain game page. Because the demo captain key is public, those notes are not a private channel.
 - Visitors can change anything. **Captain → Home → Reset demo data** restores the starting sample. Every night at 03:00 MT the demo re-seeds itself in the background (fresh dates). Making new player/captain links is disabled in the demo.
 - No real teammate data is used. Don't import contact lists into the demo.
 

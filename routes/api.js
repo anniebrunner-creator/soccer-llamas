@@ -11,6 +11,7 @@ r.get('/summary', (req, res) => {
   const d = store.get(); const g = team.nextGame(d); const h = g && team.headcount(d, g);
   const names = (l) => l.map((p) => p.name);
   res.json({
+    // Names only. Out-notes (declineReason) stay off this summary, even for a captain key.
     nextGame: g && { id: g.id, when: T.fmtGame(g.startsAt), startsAt: g.startsAt, location: g.location, address: g.address, in: names(h.in), maybe: names(h.maybe), out: names(h.out), noReply: names(h.none), status: h.level, message: h.message, keepers: names(h.keepers) },
     leaderboardTop5: leaderboard(d).map((x) => ({ name: x.player.name, points: x.total })),
     injuryReserve: team.activeInjuries(d).map((i) => ({ name: (d.players.find((p) => p.id === i.playerId) || {}).name, injury: i.injury, expectedReturn: i.expectedReturn })),

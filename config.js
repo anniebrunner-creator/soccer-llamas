@@ -77,9 +77,9 @@ const config = {
     sms: { enabled: false, provider: 'twilio', from: '+1XXXXXXXXXX' }, // pluggable, OFF; see README for cost
   },
 
+  // Custody is fixed. It is not a Llama Points reward, and it is not reassigned from the leaderboard.
   pinnies: {
-    holders: 2,       // how many top point-earners hold spares (set 3 if you like)
-    sparesEach: 2,
+    custody: 'Amber/Kat keep team pinnies.',
   },
 
   leaderboardSize: 5, // public top-N; we never rank the bottom

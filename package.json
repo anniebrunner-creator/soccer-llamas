@@ -8,7 +8,8 @@
     "start": "node server.js",
     "seed": "node seed.js",
     "screenshots": "node scripts/screenshots.js",
-    "simulate": "node scripts/simulate-week.js"
+    "simulate": "node scripts/simulate-week.js",
+    "test": "node --test test/*.js"
   },
   "engines": {
     "node": ">=18"

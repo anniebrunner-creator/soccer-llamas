@@ -67,8 +67,8 @@ module.exports = {
     B: { subject: '🧤 Keeper wanted (+5 points!)', body: '{name}, be our hero in goal on {date} — +5 Llama Points when we\'re short a keeper.' + tap + footer },
   },
   gameDay: {
-    A: { subject: 'Today {time}: {location}', body: 'See you today, {name}! {time} at {location}, {address}.\nMap: {map}\nSpare pinnies: {pinnies}. Game card: {gameCard}.\n{count} llamas in.' + footer },
-    B: { subject: '🦙 Game day! {time} at {location}', body: 'Lace up, {name}! Kickoff {time} at {location} ({address}).\nDirections: {map}\nPinnies: {pinnies} · Game card: {gameCard}' + footer },
+    A: { subject: 'Today {time}: {location}', body: 'See you today, {name}! {time} at {location}, {address}.\nMap: {map}\n{pinnies} Game card: {gameCard}.\n{count} llamas in.' + footer },
+    B: { subject: '🦙 Game day! {time} at {location}', body: 'Lace up, {name}! Kickoff {time} at {location} ({address}).\nDirections: {map}\n{pinnies} Game card: {gameCard}.' + footer },
   },
   checkinPrompt: {
     A: { subject: 'Did you play today? Tap to check in', body: 'Thanks for coming, {name}! Tap to mark yourself present (+2 Llama Points): {pageLink}' + footer },

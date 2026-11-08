@@ -9,3 +9,5 @@
 5. Deploy. With `DEMO=1` the captain demo key is `demo-captain` (open `/admin?key=demo-captain`).
 
 Note: data is stored in `data/` on local disk, which is ephemeral on Render's free tier (resets on redeploy/restart).
+
+Out notes ("Why can’t you make it?") are optional and may be blank. On this demo they are **not private**: `DEMO=1` publishes the captain key `demo-captain`, and the captain attendance page is part of the public click-around. Players are made up. Do not enter real health information. Notes do not change points, reminders, or injury reserve.
